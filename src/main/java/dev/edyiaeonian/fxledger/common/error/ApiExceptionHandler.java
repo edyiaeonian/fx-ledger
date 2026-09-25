@@ -5,6 +5,7 @@ import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -39,6 +40,13 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     ProblemDetail typeMismatch(MethodArgumentTypeMismatchException exception) {
         return problem(ErrorCode.MALFORMED_REQUEST, "invalid value for '" + exception.getName() + "'");
+    }
+
+    // lock_timeout expired while waiting for another transaction's lock.
+    @ExceptionHandler(PessimisticLockingFailureException.class)
+    ProblemDetail lockTimeout(PessimisticLockingFailureException exception) {
+        log.warn("lock wait timed out", exception);
+        return problem(ErrorCode.LOCK_TIMEOUT, "the account is busy; retry the request, with the same Idempotency-Key");
     }
 
     // The last resort. The details go to the log, never to the client: a

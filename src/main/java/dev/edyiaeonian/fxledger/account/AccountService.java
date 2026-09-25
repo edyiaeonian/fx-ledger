@@ -3,12 +3,18 @@ package dev.edyiaeonian.fxledger.account;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Collection;
 import java.util.Currency;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.TreeSet;
 import java.util.UUID;
 
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import dev.edyiaeonian.fxledger.common.error.DomainException;
@@ -58,6 +64,48 @@ public class AccountService {
     public List<Account> accountsOf(UUID customerId) {
         requireCustomer(customerId);
         return accounts.findByCustomer(customerId);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<Account> findAccount(UUID accountId) {
+        return accounts.findById(accountId);
+    }
+
+    /** The system account of this type for this currency; every supported currency has one. */
+    @Transactional(readOnly = true)
+    public UUID systemAccountId(AccountType type, Currency currency) {
+        if (type == AccountType.CUSTOMER) {
+            throw new IllegalArgumentException("not a system account type: " + type);
+        }
+        return accounts.systemAccountId(type, currency);
+    }
+
+    /**
+     * Locks these accounts until the caller's transaction ends, always in
+     * ascending id order.
+     *
+     * <p>A fixed order is what prevents deadlock: if one transfer locked A
+     * then B while another locked B then A, each would wait for the other
+     * forever. With every caller taking locks in the same order, the second
+     * simply waits for the first to finish.
+     *
+     * @throws DomainException ACCOUNT_NOT_FOUND if any of them does not exist
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Map<UUID, Account> lockInIdOrder(Collection<UUID> accountIds) {
+        Map<UUID, Account> locked = new LinkedHashMap<>();
+        for (UUID id : new TreeSet<>(accountIds)) {
+            Account account = accounts.lockById(id)
+                    .orElseThrow(() -> new DomainException(ErrorCode.ACCOUNT_NOT_FOUND, "no account " + id));
+            locked.put(id, account);
+        }
+        return locked;
+    }
+
+    /** Sets a balance; only for the ledger, on an account it has locked. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void updateBalance(UUID accountId, Money balance) {
+        accounts.updateBalance(accountId, balance.minorUnits());
     }
 
     private void requireCustomer(UUID customerId) {

@@ -6,6 +6,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Currency;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -47,6 +48,45 @@ class AccountRepository {
                 .param("customerId", customerId)
                 .query(AccountRepository::toAccount)
                 .list();
+    }
+
+    Optional<Account> findById(UUID id) {
+        return jdbc.sql("""
+                SELECT id, customer_id, currency, type, balance, created_at
+                FROM accounts
+                WHERE id = :id
+                """)
+                .param("id", id)
+                .query(AccountRepository::toAccount)
+                .optional();
+    }
+
+    /** Locks the row until the transaction ends; empty if there is no such account. */
+    Optional<Account> lockById(UUID id) {
+        return jdbc.sql("""
+                SELECT id, customer_id, currency, type, balance, created_at
+                FROM accounts
+                WHERE id = :id
+                FOR UPDATE
+                """)
+                .param("id", id)
+                .query(AccountRepository::toAccount)
+                .optional();
+    }
+
+    UUID systemAccountId(AccountType type, Currency currency) {
+        return jdbc.sql("SELECT id FROM accounts WHERE type = :type AND currency = :currency")
+                .param("type", type.name())
+                .param("currency", currency.getCurrencyCode())
+                .query(UUID.class)
+                .single();
+    }
+
+    void updateBalance(UUID id, long balance) {
+        jdbc.sql("UPDATE accounts SET balance = :balance WHERE id = :id")
+                .param("id", id)
+                .param("balance", balance)
+                .update();
     }
 
     private static Account toAccount(ResultSet row, int rowNumber) throws SQLException {
