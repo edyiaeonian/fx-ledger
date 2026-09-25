@@ -1,0 +1,11 @@
+services:
+  postgres:
+    # Pinned to a major version so a new PostgreSQL release cannot change
+    # behaviour (locking, SQL) without a commit that says so.
+    image: 'postgres:18'
+    environment:
+      - 'POSTGRES_DB=fxledger'
+      - 'POSTGRES_USER=fxledger'
+      - 'POSTGRES_PASSWORD=fxledger'
+    ports:
+      - '5432'
