@@ -75,7 +75,9 @@ Each currency sums to zero on its own. The FX position accounts are what let it 
 across currencies: they take euros in and pay pounds out. 99.50 × 0.85 = 84.575, and the
 amount paid out is rounded **down** while the fee is rounded **up**, so the service never
 pays out more than the arithmetic gives. The customer sees both figures in the quote,
-before accepting it.
+before accepting it. An amount the fee would swallow, or one that rounds down to nothing
+in the target currency (1 JPY to EUR, say), is refused with a 422 rather than quoted at
+zero; the database also rejects a quote whose payout is not positive.
 
 ## Architecture
 
@@ -163,8 +165,8 @@ whatever the market did since, and that risk is the service's, not the customer'
 
 ## What the tests prove
 
-133 tests, run by CI on every push against a real PostgreSQL (Testcontainers). A second CI
-job builds the Docker image, starts the whole service with `docker compose` and drives it
+Every test runs in CI on every push, against a real PostgreSQL (Testcontainers). A second
+CI job builds the Docker image, starts the whole service with `docker compose` and drives it
 over HTTP.
 
 | Test | Shows |

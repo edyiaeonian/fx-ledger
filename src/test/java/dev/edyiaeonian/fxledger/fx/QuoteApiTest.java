@@ -153,6 +153,19 @@ class QuoteApiTest {
         }
 
         @Test
+        void anAmountThatConvertsToNothingIsTooSmall() {
+            // 1 JPY: the fee rounds up to the whole yen, and nothing is left to convert.
+            MvcTestResult oneYen = quote("JPY", "EUR", "1");
+            // 100 JPY at 0.5%: 99 JPY left, 99 / 162.345 = 0.6098 EUR -- payable.
+            MvcTestResult hundredYen = quote("JPY", "EUR", "100");
+
+            assertThat(oneYen).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+            assertThat(oneYen).bodyJson().extractingPath("$.code").isEqualTo("AMOUNT_TOO_SMALL");
+            assertThat(hundredYen).hasStatus(HttpStatus.CREATED);
+            assertThat(hundredYen).bodyJson().extractingPath("$.targetAmount").isEqualTo("0.60");
+        }
+
+        @Test
         void anUnknownQuoteIsNotFound() {
             MvcTestResult result = mvc.get().uri("/quotes/" + UUID.randomUUID()).exchange();
 
