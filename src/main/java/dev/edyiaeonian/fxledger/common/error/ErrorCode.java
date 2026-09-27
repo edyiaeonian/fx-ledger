@@ -17,13 +17,18 @@ public enum ErrorCode {
     NOT_FOUND(HttpStatus.NOT_FOUND),
     CUSTOMER_NOT_FOUND(HttpStatus.NOT_FOUND),
     ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND),
+    QUOTE_NOT_FOUND(HttpStatus.NOT_FOUND),
     METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED),
     ACCOUNT_ALREADY_EXISTS(HttpStatus.CONFLICT),
     IDEMPOTENCY_KEY_REUSED(HttpStatus.CONFLICT),
     CURRENCY_MISMATCH(HttpStatus.UNPROCESSABLE_CONTENT),
     INSUFFICIENT_FUNDS(HttpStatus.UNPROCESSABLE_CONTENT),
+    // The fee would leave nothing to convert, or the result rounds to zero.
+    AMOUNT_TOO_SMALL(HttpStatus.UNPROCESSABLE_CONTENT),
     // Another request holds a lock this one needs; retrying later is safe.
     LOCK_TIMEOUT(HttpStatus.SERVICE_UNAVAILABLE),
+    // No rates yet, or the latest are older than the configured maximum.
+    RATES_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR);
 
     private final HttpStatus status;

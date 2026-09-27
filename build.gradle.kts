@@ -38,6 +38,7 @@ dependencies {
 	testImplementation("org.testcontainers:testcontainers-postgresql")
 	testImplementation("net.jqwik:jqwik:1.10.1")
 	testImplementation("net.jqwik:jqwik-spring:0.12.0")
+	testImplementation("org.wiremock:wiremock-standalone:3.13.2")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
