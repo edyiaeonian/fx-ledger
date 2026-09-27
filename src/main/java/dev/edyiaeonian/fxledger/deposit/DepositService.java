@@ -1,11 +1,7 @@
 package dev.edyiaeonian.fxledger.deposit;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.temporal.ChronoUnit;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 
@@ -17,6 +13,7 @@ import dev.edyiaeonian.fxledger.account.AccountService;
 import dev.edyiaeonian.fxledger.account.AccountType;
 import dev.edyiaeonian.fxledger.common.error.DomainException;
 import dev.edyiaeonian.fxledger.common.error.ErrorCode;
+import dev.edyiaeonian.fxledger.common.idempotency.IdempotencyKeys;
 import dev.edyiaeonian.fxledger.ledger.EntryType;
 import dev.edyiaeonian.fxledger.ledger.LedgerService;
 import dev.edyiaeonian.fxledger.ledger.LedgerService.PostingRequest;
@@ -65,7 +62,8 @@ public class DepositService {
                     "account " + accountId + " holds " + account.balance().currency() + ", not " + amount.currency());
         }
 
-        String hash = requestHash(accountId, amount);
+        // What makes two deposits "the same": the account and the exact amount.
+        String hash = IdempotencyKeys.requestHash(accountId, amount.currency().getCurrencyCode(), amount.minorUnits());
         Deposit deposit = new Deposit(
                 UUID.randomUUID(), accountId, amount, UUID.randomUUID(),
                 clock.instant().truncatedTo(ChronoUnit.MICROS));
@@ -85,17 +83,5 @@ public class DepositService {
                 new PostingRequest(funding, amount.negate()),
                 new PostingRequest(accountId, amount)));
         return new Result(deposit, false);
-    }
-
-    // What makes two requests "the same": the account and the exact amount.
-    private static String requestHash(UUID accountId, Money amount) {
-        String canonical = accountId + "|" + amount.currency().getCurrencyCode() + "|" + amount.minorUnits();
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256").digest(canonical.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(digest);
-        } catch (NoSuchAlgorithmException impossible) {
-            // Every Java runtime is required to provide SHA-256.
-            throw new IllegalStateException(impossible);
-        }
     }
 }

@@ -18,11 +18,15 @@ public enum ErrorCode {
     CUSTOMER_NOT_FOUND(HttpStatus.NOT_FOUND),
     ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND),
     QUOTE_NOT_FOUND(HttpStatus.NOT_FOUND),
+    TRANSFER_NOT_FOUND(HttpStatus.NOT_FOUND),
     METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED),
     ACCOUNT_ALREADY_EXISTS(HttpStatus.CONFLICT),
     IDEMPOTENCY_KEY_REUSED(HttpStatus.CONFLICT),
+    QUOTE_ALREADY_USED(HttpStatus.CONFLICT),
     CURRENCY_MISMATCH(HttpStatus.UNPROCESSABLE_CONTENT),
     INSUFFICIENT_FUNDS(HttpStatus.UNPROCESSABLE_CONTENT),
+    QUOTE_EXPIRED(HttpStatus.UNPROCESSABLE_CONTENT),
+    SAME_ACCOUNT(HttpStatus.UNPROCESSABLE_CONTENT),
     // The fee would leave nothing to convert, or the result rounds to zero.
     AMOUNT_TOO_SMALL(HttpStatus.UNPROCESSABLE_CONTENT),
     // Another request holds a lock this one needs; retrying later is safe.

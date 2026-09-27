@@ -61,13 +61,24 @@ class AccountRepository {
                 .optional();
     }
 
-    /** Locks the row until the transaction ends; empty if there is no such account. */
+    /**
+     * Locks the row until the transaction ends; empty if there is no such account.
+     *
+     * <p>FOR NO KEY UPDATE, not FOR UPDATE: only the balance changes, never
+     * the key. The difference matters because inserting a deposit or transfer
+     * row checks its foreign key to the account by taking a shared KEY SHARE
+     * lock on it. FOR UPDATE conflicts with that lock, so two transactions
+     * that had each checked a foreign key would each wait for the other to
+     * release it: a deadlock. FOR NO KEY UPDATE does not conflict with KEY
+     * SHARE, yet still conflicts with itself, so balance updates to one
+     * account still happen one at a time.
+     */
     Optional<Account> lockById(UUID id) {
         return jdbc.sql("""
                 SELECT id, customer_id, currency, type, balance, created_at
                 FROM accounts
                 WHERE id = :id
-                FOR UPDATE
+                FOR NO KEY UPDATE
                 """)
                 .param("id", id)
                 .query(AccountRepository::toAccount)

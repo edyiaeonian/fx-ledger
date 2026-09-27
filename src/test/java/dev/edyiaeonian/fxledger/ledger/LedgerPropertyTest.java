@@ -8,9 +8,16 @@ import dev.edyiaeonian.fxledger.account.AccountService;
 import dev.edyiaeonian.fxledger.common.error.DomainException;
 import dev.edyiaeonian.fxledger.common.error.ErrorCode;
 import dev.edyiaeonian.fxledger.deposit.DepositService;
+import dev.edyiaeonian.fxledger.fx.FxRateService;
+import dev.edyiaeonian.fxledger.fx.Quote;
+import dev.edyiaeonian.fxledger.fx.QuoteService;
 import dev.edyiaeonian.fxledger.ledger.LedgerService.PostingRequest;
 import dev.edyiaeonian.fxledger.money.Money;
 import dev.edyiaeonian.fxledger.support.LedgerInvariants;
+import dev.edyiaeonian.fxledger.support.TestRates;
+import dev.edyiaeonian.fxledger.transfer.TransferService;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Currency;
 import java.util.HashMap;
@@ -32,8 +39,10 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Random sequences of operations, checked against a model simple enough to be
- * obviously right: a map from account to the balance it should have.
+ * Random sequences of operations -- opening accounts, deposits, idempotent
+ * retries, same-currency moves and quoted cross-currency transfers --
+ * checked against a model simple enough to be obviously right: a map from
+ * account to the balance it should have.
  *
  * <p>After every step, each balance must match the model and every ledger
  * invariant must hold. When a sequence fails, jqwik shrinks it to the
@@ -44,7 +53,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Import(TestcontainersConfiguration.class)
 class LedgerPropertyTest {
 
-    sealed interface Op permits Open, Deposit, Retry, Move {}
+    sealed interface Op permits Open, Deposit, Retry, Move, Exchange {}
 
     /** Opens an account in this currency, for a new customer. */
     record Open(String currency) implements Op {}
@@ -57,6 +66,9 @@ class LedgerPropertyTest {
 
     /** Moves money between two accounts of the same currency; may overdraw. */
     record Move(int from, int to, long amount) implements Op {}
+
+    /** Quotes and carries out a transfer into an account of another currency; may overdraw. */
+    record Exchange(int from, int to, long amount) implements Op {}
 
     record DepositCall(String key, UUID account, Money amount) {}
 
@@ -73,6 +85,15 @@ class LedgerPropertyTest {
     TransactionTemplate transaction;
 
     @Autowired
+    FxRateService rates;
+
+    @Autowired
+    QuoteService quotes;
+
+    @Autowired
+    TransferService transfers;
+
+    @Autowired
     JdbcClient jdbc;
 
     @Property(tries = 200)
@@ -81,6 +102,8 @@ class LedgerPropertyTest {
         Map<UUID, Currency> currencyOf = new HashMap<>();
         Map<UUID, Long> expected = new HashMap<>();
         List<DepositCall> made = new ArrayList<>();
+        // This context runs on the real clock, so the rates are dated today.
+        rates.accept(TestRates.on(LocalDate.now(ZoneOffset.UTC)));
 
         for (Op op : operations) {
             switch (op) {
@@ -131,6 +154,35 @@ class LedgerPropertyTest {
                         expected.merge(to, amount, Long::sum);
                     }
                 }
+                case Exchange(int fromIndex, int toIndex, long amount) when !open.isEmpty() -> {
+                    UUID from = open.get(fromIndex % open.size());
+                    List<UUID> otherCurrency = open.stream()
+                            .filter(a -> !currencyOf.get(a).equals(currencyOf.get(from)))
+                            .toList();
+                    if (otherCurrency.isEmpty()) {
+                        continue;
+                    }
+                    UUID to = otherCurrency.get(toIndex % otherCurrency.size());
+                    Quote quote;
+                    try {
+                        quote = quotes.create(Money.ofMinor(amount, currencyOf.get(from)), currencyOf.get(to));
+                    } catch (DomainException tooSmall) {
+                        // A few yen can convert to less than a cent: no quote, no transfer.
+                        assertThat(tooSmall.code()).isEqualTo(ErrorCode.AMOUNT_TOO_SMALL);
+                        continue;
+                    }
+                    Runnable transfer = () -> transfers.transfer(UUID.randomUUID().toString(), quote.id(), from, to);
+                    if (expected.get(from) < quote.source().minorUnits()) {
+                        assertThatThrownBy(transfer::run)
+                                .isInstanceOf(DomainException.class)
+                                .extracting(e -> ((DomainException) e).code())
+                                .isEqualTo(ErrorCode.INSUFFICIENT_FUNDS);
+                    } else {
+                        transfer.run();
+                        expected.merge(from, -quote.source().minorUnits(), Long::sum);
+                        expected.merge(to, quote.target().minorUnits(), Long::sum);
+                    }
+                }
                 default -> {
                     // A deposit, retry or move before there is anything to act on.
                 }
@@ -154,8 +206,11 @@ class LedgerPropertyTest {
         // Moves go up to more than a deposit brings in, so overdrafts are tried often.
         Arbitrary<Op> move = Combinators.combine(index, index, Arbitraries.longs().between(1, 150_000))
                 .as(Move::new);
+        Arbitrary<Op> exchange = Combinators.combine(index, index, Arbitraries.longs().between(1, 150_000))
+                .as(Exchange::new);
         return Arbitraries.frequencyOf(
-                        Tuple.of(2, open), Tuple.of(4, deposit), Tuple.of(1, retry), Tuple.of(4, move))
+                        Tuple.of(2, open), Tuple.of(4, deposit), Tuple.of(1, retry), Tuple.of(3, move),
+                        Tuple.of(3, exchange))
                 .list()
                 .ofMinSize(1)
                 .ofMaxSize(30);

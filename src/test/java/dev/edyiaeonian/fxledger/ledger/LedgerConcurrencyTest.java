@@ -199,6 +199,27 @@ class LedgerConcurrencyTest {
     }
 
     @Test
+    void manyDifferentDepositsIntoOneAccountAtOnce() throws Exception {
+        // Each deposit's row has a foreign key to the account, and checking it
+        // takes a shared lock on the account before the ledger takes its own.
+        UUID account = fundedAccount(0);
+        List<Runnable> tasks = new ArrayList<>();
+        for (int i = 0; i < THREADS; i++) {
+            tasks.add(() -> {
+                for (int n = 0; n < 5; n++) {
+                    deposits.deposit(UUID.randomUUID().toString(), account, Money.ofMinor(100, EUR));
+                }
+            });
+        }
+
+        List<Throwable> failures = runTogether(tasks);
+
+        assertThat(failures).as("no deposit may fail, least of all with a deadlock").isEmpty();
+        assertThat(balance(account)).isEqualTo((long) THREADS * 5 * 100);
+        LedgerInvariants.assertHold(jdbc);
+    }
+
+    @Test
     void theSystemFundingAccountSurvivesManyDepositsAtOnce() throws Exception {
         // Every deposit in a currency also writes to its one FUNDING account,
         // so all of them contend for that single row.

@@ -3,7 +3,6 @@ package dev.edyiaeonian.fxledger.deposit;
 import java.net.URI;
 import java.time.Instant;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
@@ -18,15 +17,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 import dev.edyiaeonian.fxledger.common.error.DomainException;
 import dev.edyiaeonian.fxledger.common.error.ErrorCode;
+import dev.edyiaeonian.fxledger.common.idempotency.IdempotencyKeys;
 import dev.edyiaeonian.fxledger.money.Money;
 import dev.edyiaeonian.fxledger.money.SupportedCurrencies;
 
 @RestController
 class DepositController {
-
-    // Printable ASCII, 1 to 255 characters: room for a UUID or any client's
-    // own scheme, nothing that could smuggle control characters into logs.
-    private static final Pattern IDEMPOTENCY_KEY = Pattern.compile("[\\x21-\\x7E]{1,255}");
 
     record DepositRequest(@NotNull String amount, @NotNull String currency) {}
 
@@ -53,14 +49,10 @@ class DepositController {
             @PathVariable UUID accountId,
             @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody DepositRequest request) {
-        if (idempotencyKey == null || !IDEMPOTENCY_KEY.matcher(idempotencyKey).matches()) {
-            throw new DomainException(
-                    ErrorCode.IDEMPOTENCY_KEY_REQUIRED,
-                    "an Idempotency-Key header of 1 to 255 printable ASCII characters is required");
-        }
+        String key = IdempotencyKeys.require(idempotencyKey);
         Money amount = parsePositive(request.amount(), request.currency());
 
-        DepositService.Result result = service.deposit(idempotencyKey, accountId, amount);
+        DepositService.Result result = service.deposit(key, accountId, amount);
 
         // A replay answers exactly as the original did, and says so.
         var response = ResponseEntity.status(HttpStatus.CREATED)

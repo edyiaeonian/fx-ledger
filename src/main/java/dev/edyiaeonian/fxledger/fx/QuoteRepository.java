@@ -43,7 +43,24 @@ class QuoteRepository {
     }
 
     Optional<Quote> findById(UUID id) {
-        return jdbc.sql("SELECT * FROM quotes WHERE id = :id")
+        return select("SELECT * FROM quotes WHERE id = :id", id);
+    }
+
+    /**
+     * Locks the quote until the transaction ends, so two transfers cannot both
+     * use it. FOR NO KEY UPDATE for the same reason as accounts: the transfer
+     * row's foreign key to the quote takes a KEY SHARE lock first.
+     */
+    Optional<Quote> lockById(UUID id) {
+        return select("SELECT * FROM quotes WHERE id = :id FOR NO KEY UPDATE", id);
+    }
+
+    void markUsed(UUID id) {
+        jdbc.sql("UPDATE quotes SET status = 'USED' WHERE id = :id").param("id", id).update();
+    }
+
+    private Optional<Quote> select(String sql, UUID id) {
+        return jdbc.sql(sql)
                 .param("id", id)
                 .query((row, n) -> {
                     Currency source = Currency.getInstance(row.getString("source_currency"));
