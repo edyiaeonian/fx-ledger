@@ -27,10 +27,10 @@ import dev.edyiaeonian.fxledger.money.Money;
  * currency's FUNDING account.
  */
 @Service
-class DepositService {
+public class DepositService {
 
     /** replayed is true when the deposit was made by an earlier request with the same key. */
-    record Result(Deposit deposit, boolean replayed) {}
+    public record Result(Deposit deposit, boolean replayed) {}
 
     private final DepositRepository deposits;
     private final AccountService accounts;

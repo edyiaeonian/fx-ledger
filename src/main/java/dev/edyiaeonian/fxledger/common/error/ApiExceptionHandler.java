@@ -1,10 +1,12 @@
 package dev.edyiaeonian.fxledger.common.error;
 
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -31,6 +33,9 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
 
+    // PostgreSQL's SQLState for "lock_not_available", raised when lock_timeout expires.
+    private static final String LOCK_NOT_AVAILABLE = "55P03";
+
     @ExceptionHandler(DomainException.class)
     ProblemDetail domain(DomainException exception) {
         return problem(exception.code(), exception.getMessage());
@@ -42,11 +47,26 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return problem(ErrorCode.MALFORMED_REQUEST, "invalid value for '" + exception.getName() + "'");
     }
 
-    // lock_timeout expired while waiting for another transaction's lock.
-    @ExceptionHandler(PessimisticLockingFailureException.class)
-    ProblemDetail lockTimeout(PessimisticLockingFailureException exception) {
-        log.warn("lock wait timed out", exception);
-        return problem(ErrorCode.LOCK_TIMEOUT, "the account is busy; retry the request, with the same Idempotency-Key");
+    // Waiting for another transaction's lock took too long. PostgreSQL
+    // reports lock_timeout as SQLState 55P03, which Spring does not map to a
+    // specific exception, so the state is read from the SQLException itself.
+    // A detected deadlock (40P01) does arrive as a PessimisticLockingFailure.
+    @ExceptionHandler(DataAccessException.class)
+    ProblemDetail dataAccess(DataAccessException exception) {
+        if (exception instanceof PessimisticLockingFailureException || hasSqlState(exception, LOCK_NOT_AVAILABLE)) {
+            log.warn("lock wait failed", exception);
+            return problem(ErrorCode.LOCK_TIMEOUT, "the account is busy; retry the request, with the same Idempotency-Key");
+        }
+        return unexpected(exception);
+    }
+
+    private static boolean hasSqlState(Throwable exception, String state) {
+        for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
+            if (cause instanceof SQLException sql && state.equals(sql.getSQLState())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // The last resort. The details go to the log, never to the client: a

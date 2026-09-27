@@ -41,3 +41,6 @@ out/
 
 ### Local secrets ###
 .env
+
+### jqwik (failing-sample cache) ###
+.jqwik-database

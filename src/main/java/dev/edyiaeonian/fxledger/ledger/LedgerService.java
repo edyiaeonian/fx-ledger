@@ -1,7 +1,6 @@
 package dev.edyiaeonian.fxledger.ledger;
 
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Currency;
@@ -10,7 +9,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,17 +35,11 @@ public class LedgerService {
     private final AccountService accounts;
     private final LedgerRepository repository;
     private final Clock clock;
-    private final Duration lockTimeout;
 
-    LedgerService(
-            AccountService accounts,
-            LedgerRepository repository,
-            Clock clock,
-            @Value("${fxledger.ledger.lock-timeout:5s}") Duration lockTimeout) {
+    LedgerService(AccountService accounts, LedgerRepository repository, Clock clock) {
         this.accounts = accounts;
         this.repository = repository;
         this.clock = clock;
-        this.lockTimeout = lockTimeout;
     }
 
     /**
@@ -66,9 +58,6 @@ public class LedgerService {
     public UUID post(UUID entryId, EntryType type, List<PostingRequest> postings) {
         requireBalanced(postings);
 
-        // Waiting for another transaction's lock is capped, so a stuck request
-        // fails with a retryable error instead of hanging.
-        repository.setLockTimeout(lockTimeout);
         Map<UUID, Account> locked =
                 accounts.lockInIdOrder(postings.stream().map(PostingRequest::accountId).toList());
 

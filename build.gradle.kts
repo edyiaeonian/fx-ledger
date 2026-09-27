@@ -36,6 +36,8 @@ dependencies {
 	testImplementation("org.springframework.boot:spring-boot-testcontainers")
 	testImplementation("org.testcontainers:testcontainers-junit-jupiter")
 	testImplementation("org.testcontainers:testcontainers-postgresql")
+	testImplementation("net.jqwik:jqwik:1.10.1")
+	testImplementation("net.jqwik:jqwik-spring:0.12.0")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 

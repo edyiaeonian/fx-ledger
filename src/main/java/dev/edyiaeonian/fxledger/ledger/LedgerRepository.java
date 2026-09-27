@@ -1,6 +1,5 @@
 package dev.edyiaeonian.fxledger.ledger;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -24,12 +23,6 @@ class LedgerRepository {
 
     LedgerRepository(JdbcClient jdbc) {
         this.jdbc = jdbc;
-    }
-
-    /** Applies to the current transaction only (SET LOCAL). */
-    void setLockTimeout(Duration timeout) {
-        // SET does not take bind parameters; the value is a number we built.
-        jdbc.sql("SET LOCAL lock_timeout = '" + timeout.toMillis() + "ms'").update();
     }
 
     void insertEntry(UUID id, EntryType type, Instant createdAt) {
