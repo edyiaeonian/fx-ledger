@@ -25,9 +25,10 @@ class OpenApiConfiguration {
                         posting with its running balance.
 
                         Amounts are strings (`"100.50"`), never JSON numbers. Deposits and
-                        transfers need an `Idempotency-Key` header: repeating a request with
-                        the same key returns the original result instead of moving money
-                        again. Errors are RFC 9457 problem details with a stable `code`.
+                        transfers need an `Idempotency-Key` header, unique per account:
+                        repeating a request with the same key returns the original result
+                        instead of moving money again. Errors are RFC 9457 problem details
+                        with a stable `code`.
                         """)
                 .license(new License().name("MIT")));
     }

@@ -23,8 +23,8 @@ class DepositRepository {
     }
 
     /**
-     * Claims the idempotency key by inserting the deposit; false if the key
-     * is already taken.
+     * Claims the idempotency key, for this account, by inserting the deposit;
+     * false if the account has already used the key.
      *
      * <p>If another transaction has inserted the same key but not yet
      * committed, PostgreSQL makes this wait for it: if it commits, the key is
@@ -35,7 +35,7 @@ class DepositRepository {
         int inserted = jdbc.sql("""
                 INSERT INTO deposits (id, idempotency_key, request_hash, account_id, currency, amount, entry_id, created_at)
                 VALUES (:id, :key, :hash, :accountId, :currency, :amount, :entryId, :createdAt)
-                ON CONFLICT (idempotency_key) DO NOTHING
+                ON CONFLICT (account_id, idempotency_key) DO NOTHING
                 """)
                 .param("id", deposit.id())
                 .param("key", idempotencyKey)
@@ -49,12 +49,13 @@ class DepositRepository {
         return inserted == 1;
     }
 
-    Optional<Stored> findByKey(String idempotencyKey) {
+    Optional<Stored> findByKey(UUID accountId, String idempotencyKey) {
         return jdbc.sql("""
                 SELECT id, account_id, currency, amount, entry_id, created_at, request_hash
                 FROM deposits
-                WHERE idempotency_key = :key
+                WHERE account_id = :accountId AND idempotency_key = :key
                 """)
+                .param("accountId", accountId)
                 .param("key", idempotencyKey)
                 .query((row, n) -> new Stored(
                         new Deposit(

@@ -21,9 +21,12 @@ public record FxProperties(
         @DefaultValue("1h") Duration refreshInterval,
         @DefaultValue("5s") Duration connectTimeout,
         @DefaultValue("10s") Duration readTimeout,
-        // Rates older than this stop new quotes. Four days covers a weekend
-        // plus a holiday, when the ECB publishes nothing.
-        @DefaultValue("4d") Duration maxRateAge,
+        // Rates older than this stop new quotes. The ECB publishes nothing at
+        // weekends or on TARGET holidays, and the longest such gap is Easter:
+        // Thursday's rates are the latest until Tuesday afternoon, five days
+        // later (Christmas on a Monday and Tuesday does the same). Four days
+        // stopped quoting every Easter Tuesday morning.
+        @DefaultValue("5d") Duration maxRateAge,
         // A fraction of the source amount: 0.005 is 0.5%.
         @DefaultValue("0.005") BigDecimal feeRate,
         @DefaultValue("10m") Duration quoteTtl) {

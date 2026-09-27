@@ -80,7 +80,7 @@ public class TransferService {
             throw new DomainException(ErrorCode.QUOTE_ALREADY_USED, "quote " + quoteId + " has already been used");
         }
         if (!claimed) {
-            TransferRepository.Stored earlier = transfers.findByKey(idempotencyKey).orElseThrow();
+            TransferRepository.Stored earlier = transfers.findByKey(sourceAccountId, idempotencyKey).orElseThrow();
             if (!earlier.requestHash().equals(hash)) {
                 throw new DomainException(
                         ErrorCode.IDEMPOTENCY_KEY_REUSED, "idempotency key already used for a different transfer");

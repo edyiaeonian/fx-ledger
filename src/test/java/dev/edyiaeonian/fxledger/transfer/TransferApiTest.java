@@ -236,6 +236,22 @@ class TransferApiTest {
         }
 
         @Test
+        void aKeyBelongsToTheSourceAccountSoAnotherSenderCanUseItToo() throws Exception {
+            UUID alice = account("EUR", "10.00");
+            UUID bob = account("EUR", "10.00");
+            UUID recipient = account("GBP", "0");
+
+            MvcTestResult first = transfer("transfer-1", quote("EUR", "GBP", "10.00"), alice, recipient);
+            MvcTestResult second = transfer("transfer-1", quote("EUR", "GBP", "10.00"), bob, recipient);
+
+            assertThat(first).hasStatus(HttpStatus.CREATED);
+            assertThat(second).hasStatus(HttpStatus.CREATED);
+            assertThat(second).doesNotContainHeader("Idempotent-Replayed");
+            assertThat(balance(alice)).isEqualTo("0.00");
+            assertThat(balance(bob)).isEqualTo("0.00");
+        }
+
+        @Test
         void theKeyIsRequired() throws Exception {
             MvcTestResult result = transfer(null, quote("EUR", "GBP", "1.00"), account("EUR", "1.00"), account("GBP", "0"));
 

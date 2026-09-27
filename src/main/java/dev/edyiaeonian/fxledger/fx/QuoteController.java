@@ -71,8 +71,8 @@ class QuoteController {
     }
 
     @Operation(
-            summary = "Price a transfer at today's ECB mid-market rate plus a fee",
-            description = "The rate is not marked up; the fee (0.5%) is shown separately. Valid for ten minutes. Errors: UNSUPPORTED_CURRENCY, INVALID_AMOUNT, AMOUNT_TOO_SMALL, RATES_UNAVAILABLE.")
+            summary = "Price a transfer at the ECB daily reference rate plus a fee",
+            description = "The reference rate is used as the mid-market rate, with no markup; the fee (0.5%) is shown separately. Valid for ten minutes. Errors: UNSUPPORTED_CURRENCY, INVALID_AMOUNT, AMOUNT_TOO_SMALL, RATES_UNAVAILABLE.")
     @PostMapping("/quotes")
     ResponseEntity<QuoteResponse> create(@Valid @RequestBody QuoteRequest request) {
         Currency source = SupportedCurrencies.require(request.sourceCurrency());

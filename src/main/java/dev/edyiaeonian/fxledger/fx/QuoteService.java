@@ -30,7 +30,10 @@ public class QuoteService {
         this.clock = clock;
     }
 
-    /** Prices {@code source} in {@code target} at the current mid-market rate, plus the fee. */
+    /**
+     * Prices {@code source} in {@code target} at the latest ECB reference rate,
+     * used as the mid-market rate, plus the fee.
+     */
     @Transactional
     public Quote create(Money source, Currency target) {
         RateSnapshot current = rates.current();

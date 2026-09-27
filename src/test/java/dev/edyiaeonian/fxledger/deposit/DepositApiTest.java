@@ -123,6 +123,23 @@ class DepositApiTest {
         }
 
         @Test
+        void aKeyBelongsToOneAccountSoAnotherAccountCanUseItToo() {
+            // Two customers who happen to choose the same key are not retrying
+            // each other's request.
+            UUID alice = account("EUR");
+            UUID bob = account("EUR");
+
+            MvcTestResult first = deposit(alice, "deposit-1", "10.00", "EUR");
+            MvcTestResult second = deposit(bob, "deposit-1", "20.00", "EUR");
+
+            assertThat(first).hasStatus(HttpStatus.CREATED);
+            assertThat(second).hasStatus(HttpStatus.CREATED);
+            assertThat(second).doesNotContainHeader("Idempotent-Replayed");
+            assertThat(balance(alice)).isEqualTo("10.00");
+            assertThat(balance(bob)).isEqualTo("20.00");
+        }
+
+        @Test
         void theKeyIsRequired() {
             MvcTestResult result = deposit(account("EUR"), null, "10.00", "EUR");
 

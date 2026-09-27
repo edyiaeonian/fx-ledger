@@ -109,12 +109,25 @@ class FxRateServiceTest {
     }
 
     @Test
+    void theLongestGapInEcbPublicationsDoesNotStopQuoting() {
+        // Easter 2027: Thursday 25 March's rates are the latest until Tuesday
+        // 30 March at about 16:00 CET. That morning they are five days old.
+        LocalDate maundyThursday = LocalDate.of(2027, 3, 25);
+        clock.set(maundyThursday.atTime(16, 30).toInstant(java.time.ZoneOffset.UTC));
+        rates.accept(TestRates.on(maundyThursday));
+
+        clock.set(LocalDate.of(2027, 3, 30).atTime(9, 0).toInstant(java.time.ZoneOffset.UTC));
+
+        assertThat(rates.current().date()).isEqualTo(maundyThursday);
+    }
+
+    @Test
     void ratesOlderThanTheLimitStopQuoting() {
         LocalDate day = LocalDate.of(2026, 9, 10);
         clock.set(day.atTime(12, 0).toInstant(java.time.ZoneOffset.UTC));
         rates.accept(TestRates.on(day));
 
-        clock.advance(Duration.ofDays(4));
+        clock.advance(Duration.ofDays(5));
         assertThat(rates.current().date()).isEqualTo(day);
 
         clock.advance(Duration.ofDays(1));

@@ -114,8 +114,8 @@ class QuoteApiTest {
         }
 
         @Test
-        void ratesOlderThanFourDaysStopNewQuotes() {
-            clock.advance(Duration.ofDays(5));
+        void ratesOlderThanFiveDaysStopNewQuotes() {
+            clock.advance(Duration.ofDays(6));
 
             MvcTestResult result = quote("EUR", "GBP", "100.00");
 

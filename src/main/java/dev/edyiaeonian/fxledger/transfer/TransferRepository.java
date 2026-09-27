@@ -22,8 +22,8 @@ class TransferRepository {
     }
 
     /**
-     * Claims the idempotency key by inserting the transfer; false if the key
-     * is taken. As for deposits, a concurrent insert of the same key waits for
+     * Claims the idempotency key, for the source account, by inserting the
+     * transfer; false if that account has already used the key. As for deposits, a concurrent insert of the same key waits for
      * the other transaction, so only one of them can claim it.
      *
      * @throws org.springframework.dao.DuplicateKeyException if another
@@ -34,7 +34,7 @@ class TransferRepository {
                 INSERT INTO transfers (id, idempotency_key, request_hash, quote_id, source_account_id,
                                        target_account_id, entry_id, status, created_at)
                 VALUES (:id, :key, :hash, :quoteId, :source, :target, :entryId, :status, :createdAt)
-                ON CONFLICT (idempotency_key) DO NOTHING
+                ON CONFLICT (source_account_id, idempotency_key) DO NOTHING
                 """)
                 .param("id", transfer.id())
                 .param("key", idempotencyKey)
@@ -48,8 +48,9 @@ class TransferRepository {
                 .update() == 1;
     }
 
-    Optional<Stored> findByKey(String idempotencyKey) {
-        return jdbc.sql("SELECT * FROM transfers WHERE idempotency_key = :key")
+    Optional<Stored> findByKey(UUID sourceAccountId, String idempotencyKey) {
+        return jdbc.sql("SELECT * FROM transfers WHERE source_account_id = :source AND idempotency_key = :key")
+                .param("source", sourceAccountId)
                 .param("key", idempotencyKey)
                 .query((row, n) -> new Stored(toTransfer(row, n), row.getString("request_hash")))
                 .optional();

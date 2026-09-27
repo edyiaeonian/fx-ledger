@@ -14,8 +14,9 @@ Spring Boot on PostgreSQL.
 - **Concurrency is tested, not assumed.** Sixteen threads at once cannot overdraw an
   account, spend one quote twice or deadlock. Removing the locks makes those tests fail,
   and one of them found a real deadlock, since fixed.
-- **The customer sees the price before paying it.** Quotes use the ECB mid-market rate
-  with no markup, show the fee separately, and are locked for ten minutes.
+- **The customer sees the price before paying it.** Quotes use the ECB daily reference
+  rate as the mid-market rate, with no markup, show the fee separately, and are locked
+  for ten minutes.
 
 ## Try it
 
@@ -51,8 +52,11 @@ curl -X POST localhost:8080/transfers -H "$J" -H 'Idempotency-Key: transfer-1' \
 curl localhost:8080/accounts/$EUR/statement
 ```
 
-Rates are fetched from the ECB (through the [Frankfurter API](https://frankfurter.dev),
-no key needed) at startup and hourly.
+Rates are the ECB's daily reference rates (through the
+[Frankfurter API](https://frankfurter.dev), no key needed), fetched at startup and hourly.
+Running the whole script again creates new customers and accounts, whose keys are new
+to them: idempotency keys belong to one account, so `deposit-1` on Bob's account is not
+a retry of `deposit-1` on Alice's.
 
 ## What a transfer does
 
@@ -118,7 +122,9 @@ customer balance (a `CHECK` constraint) and a posting in a currency other than i
 account's (a composite foreign key), so a bug in the application cannot break either.
 
 **Idempotency is a unique insert.** A deposit or transfer first inserts its row with the
-client's key under a unique constraint. A duplicate arriving at the same moment waits for
+client's key under a unique constraint, scoped to the account (the account deposited
+into, or transferred from): with no authentication, the account stands in for the client,
+and two customers choosing the same key must not collide. A duplicate arriving at the same moment waits for
 the first transaction: if that commits, the duplicate returns its result; if it rolls back,
 the duplicate proceeds. A request that fails (insufficient funds, an expired quote) rolls
 back its claim, so it can be corrected and retried under the same key. A key reused for a
@@ -143,8 +149,17 @@ same key.
 
 **An outage elsewhere does not stop quotes.** Rates are fetched hourly and stored; quotes
 read the database, never the network. If the rate API goes down, quotes continue on the
-stored rates until they are more than four days old (a weekend plus a holiday, when the ECB
-publishes nothing), then stop with a 503 rather than price from stale data.
+stored rates until they are more than five days old, then stop with a 503 rather than
+price from stale data. Five, because the ECB publishes nothing at weekends or on TARGET
+holidays, and the longest gap is Easter: Thursday's rates are the latest until Tuesday
+afternoon. The first version allowed four days, which would have stopped every quote on
+the morning of every Easter Tuesday; a test now pins Easter 2027.
+
+**A daily reference rate is not a live one.** The ECB fixes its reference rates once a day,
+around 14:10 CET, and publishes them for information. This project uses them as its
+mid-market rate because they are free and authoritative. A real service would price from a
+live feed: a quote priced from a snapshot hours old leaves the FX position exposed to
+whatever the market did since, and that risk is the service's, not the customer's.
 
 ## What the tests prove
 
@@ -158,7 +173,7 @@ over HTTP.
 | Property test (jqwik) | 200 random sequences of accounts, deposits, idempotent retries, moves and quoted cross-currency transfers (overdrafts included) match an in-memory model at every step. A failure is shrunk to the shortest sequence that reproduces it |
 | Concurrency | 16 threads at once: opposing transfers do not deadlock, racing withdrawals cannot overdraw, one idempotency key deposits once, one quote is carried out once |
 | Rate source | Against WireMock: timeouts, dropped connections, errors, malformed JSON, and a rate with more digits than a `double` holds, read exactly |
-| Time | With a controllable clock: quotes expire after ten minutes; rates older than four days stop quoting |
+| Time | With a controllable clock: quotes expire after ten minutes; rates survive the Easter gap and stop quoting once older than five days |
 
 Each safeguard was also removed on purpose, to check that a test fails without it:
 
@@ -175,15 +190,28 @@ Each safeguard was also removed on purpose, to check that a test fails without i
 | Integer minor units | No floating-point error, no half cents | `double`; `BigDecimal` everywhere |
 | Double-entry, append-only postings | Every cent has a source and a destination, auditable | Updating balances in place |
 | Cached balance plus invariant tests | Reading a balance is one row, and the cache is proven to match | Summing every posting on read |
-| Mid-market rate plus a visible fee | The customer knows the rate and the fee separately | A markup hidden in the rate |
+| Reference rate plus a visible fee | The customer knows the rate and the fee separately | A markup hidden in the rate |
 | Fee rounded up, payout rounded down | Never pay out more than the arithmetic; both shown in advance | Rounding half-up both |
 | Quotes lock the rate for ten minutes | What the customer accepts is what happens | Pricing at transfer time |
-| Idempotency key plus request hash | Retries are safe; a reused key for a different request is caught | Trusting clients not to resend |
+| Idempotency key per account, plus request hash | Retries are safe; a reused key for a different request is caught; customers do not collide | Trusting clients not to resend; one key space for everyone |
 | Failed requests not remembered | A request that failed for a fixable reason can be retried | Caching failures too |
 | Row locks in id order, `FOR NO KEY UPDATE` | No overdrafts, no deadlocks, including with foreign key checks | Optimistic locking with retries |
 | Rates fetched on a schedule | The rate API being down does not fail quotes; staleness has a limit | Calling the API per quote |
 | Plain SQL through `JdbcClient` | Lock clauses and lock order are exactly as written | An ORM generating the queries |
 | Real PostgreSQL in tests | Locking behaves as in production | An in-memory database |
+
+## What changed during implementation
+
+The design came first; building and testing it changed these parts of it.
+
+| Area | Designed | Built | Why |
+|---|---|---|---|
+| Account row lock | `FOR UPDATE` | `FOR NO KEY UPDATE` | A deposit's foreign key check takes `KEY SHARE` on the account, which `FOR UPDATE` conflicts with: two deposits into one account deadlocked. A concurrency test found it; the bug had been there since deposits were added |
+| Lock wait limit | Set inside the ledger | Set on every connection | The foreign key check waits for its lock before the ledger runs, so the limit never applied there. A test that held a lock showed requests waiting until it was released |
+| Oldest usable rates | 4 days | 5 days | Every Easter, Thursday's rates are the latest until Tuesday afternoon |
+| Idempotency key scope | Whole table | Per account | Two customers choosing the same key collided |
+| "Current" rates | The latest stored | The latest dated today or earlier | Rates dated in the future must not be used |
+| Transfer status | `PENDING` then `COMPLETED` | `COMPLETED` only | A failure rolls back the whole transaction, so no other transaction could ever see `PENDING` |
 
 ## Deliberately out of scope
 

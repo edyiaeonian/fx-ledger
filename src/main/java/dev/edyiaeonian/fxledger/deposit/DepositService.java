@@ -69,7 +69,7 @@ public class DepositService {
                 clock.instant().truncatedTo(ChronoUnit.MICROS));
 
         if (!deposits.claim(idempotencyKey, hash, deposit)) {
-            DepositRepository.Stored earlier = deposits.findByKey(idempotencyKey).orElseThrow();
+            DepositRepository.Stored earlier = deposits.findByKey(accountId, idempotencyKey).orElseThrow();
             if (!earlier.requestHash().equals(hash)) {
                 throw new DomainException(
                         ErrorCode.IDEMPOTENCY_KEY_REUSED,
