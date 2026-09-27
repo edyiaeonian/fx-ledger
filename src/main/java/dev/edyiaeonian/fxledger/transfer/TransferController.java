@@ -1,5 +1,8 @@
 package dev.edyiaeonian.fxledger.transfer;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.net.URI;
 import java.time.Instant;
 import java.util.UUID;
@@ -20,6 +23,7 @@ import dev.edyiaeonian.fxledger.common.idempotency.IdempotencyKeys;
 import dev.edyiaeonian.fxledger.fx.Quote;
 
 @RestController
+@Tag(name = "4. Transfers")
 class TransferController {
 
     record TransferRequest(@NotNull UUID quoteId, @NotNull UUID sourceAccountId, @NotNull UUID targetAccountId) {}
@@ -65,9 +69,14 @@ class TransferController {
         this.service = service;
     }
 
+    @Operation(
+            summary = "Carry out a quote between two accounts",
+            description = "Moves exactly what the quote says, once. Idempotent by key. Errors: QUOTE_NOT_FOUND, QUOTE_ALREADY_USED, QUOTE_EXPIRED, CURRENCY_MISMATCH, INSUFFICIENT_FUNDS, SAME_ACCOUNT, ACCOUNT_NOT_FOUND, IDEMPOTENCY_KEY_REUSED.")
     @PostMapping("/transfers")
     ResponseEntity<TransferResponse> transfer(
-            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+            @Parameter(description = "Chosen by the client, unique per operation; a retry with the same key and body returns the original result.", example = "3f2b8c1e-5d7a-4e2b-9c1f-0a6d4e8b7c21")
+                    @RequestHeader(name = "Idempotency-Key", required = false)
+                    String idempotencyKey,
             @Valid @RequestBody TransferRequest request) {
         String key = IdempotencyKeys.require(idempotencyKey);
         TransferService.Result result =
@@ -80,6 +89,7 @@ class TransferController {
         return response.body(TransferResponse.of(result));
     }
 
+    @Operation(summary = "Read a transfer")
     @GetMapping("/transfers/{id}")
     TransferResponse find(@PathVariable UUID id) {
         return TransferResponse.of(service.find(id));

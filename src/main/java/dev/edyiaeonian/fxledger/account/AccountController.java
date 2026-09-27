@@ -1,5 +1,8 @@
 package dev.edyiaeonian.fxledger.account;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.net.URI;
 import java.time.Instant;
 import java.util.List;
@@ -18,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@Tag(name = "1. Customers and accounts")
 class AccountController {
 
     private final AccountService service;
@@ -26,7 +30,7 @@ class AccountController {
         this.service = service;
     }
 
-    record CreateCustomerRequest(@NotBlank @Size(max = 200) String name) {}
+    record CreateCustomerRequest(@Schema(example = "Alice") @NotBlank @Size(max = 200) String name) {}
 
     record CustomerResponse(UUID id, String name, Instant createdAt) {
         static CustomerResponse of(Customer customer) {
@@ -36,7 +40,10 @@ class AccountController {
 
     // The currency is checked against the supported list by the service, so
     // an unsupported one gets its own error code rather than a generic one.
-    record OpenAccountRequest(@NotNull String currency) {}
+    record OpenAccountRequest(
+            @Schema(description = "ISO 4217 code of a currency the ECB publishes rates for", example = "EUR")
+                    @NotNull
+                    String currency) {}
 
     // Amounts are strings ("100.50"), never JSON numbers: many JSON parsers
     // read a number as a binary float.
@@ -50,6 +57,7 @@ class AccountController {
         }
     }
 
+    @Operation(summary = "Create a customer")
     @PostMapping("/customers")
     ResponseEntity<CustomerResponse> createCustomer(@Valid @RequestBody CreateCustomerRequest request) {
         Customer customer = service.createCustomer(request.name());
@@ -57,6 +65,9 @@ class AccountController {
                 .body(CustomerResponse.of(customer));
     }
 
+    @Operation(
+            summary = "Open an account in one currency",
+            description = "One account per currency per customer. Errors: UNSUPPORTED_CURRENCY, CUSTOMER_NOT_FOUND, ACCOUNT_ALREADY_EXISTS.")
     @PostMapping("/customers/{customerId}/accounts")
     ResponseEntity<AccountResponse> openAccount(
             @PathVariable UUID customerId, @Valid @RequestBody OpenAccountRequest request) {
@@ -65,6 +76,7 @@ class AccountController {
                 .body(AccountResponse.of(account));
     }
 
+    @Operation(summary = "List a customer's accounts and balances")
     @GetMapping("/customers/{customerId}/accounts")
     List<AccountResponse> accounts(@PathVariable UUID customerId) {
         return service.accountsOf(customerId).stream().map(AccountResponse::of).toList();

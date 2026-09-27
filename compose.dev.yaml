@@ -1,0 +1,14 @@
+# Development only: the database for ./gradlew bootRun, which Spring Boot's
+# Docker Compose support starts automatically (see application.properties).
+# To run the whole service instead, use compose.yaml: docker compose up
+services:
+  postgres:
+    # Pinned to a major version so a new PostgreSQL release cannot change
+    # behaviour (locking, SQL) without a commit that says so.
+    image: 'postgres:18'
+    environment:
+      - 'POSTGRES_DB=fxledger'
+      - 'POSTGRES_USER=fxledger'
+      - 'POSTGRES_PASSWORD=fxledger'
+    ports:
+      - '5432'

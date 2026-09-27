@@ -1,11 +1,36 @@
+# The whole service: docker compose up, then open
+# http://localhost:8080/swagger-ui.html
+#
+# The credentials below are local defaults for a disposable database, not
+# secrets; nothing here is meant to be exposed beyond this machine.
 services:
   postgres:
-    # Pinned to a major version so a new PostgreSQL release cannot change
-    # behaviour (locking, SQL) without a commit that says so.
-    image: 'postgres:18'
+    # Pinned to a major version, like the tests: a new PostgreSQL release
+    # cannot change behaviour without a commit that says so.
+    image: postgres:18
     environment:
-      - 'POSTGRES_DB=fxledger'
-      - 'POSTGRES_USER=fxledger'
-      - 'POSTGRES_PASSWORD=fxledger'
+      POSTGRES_DB: fxledger
+      POSTGRES_USER: fxledger
+      POSTGRES_PASSWORD: fxledger
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fxledger -d fxledger"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  app:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/fxledger
+      SPRING_DATASOURCE_USERNAME: fxledger
+      SPRING_DATASOURCE_PASSWORD: fxledger
     ports:
-      - '5432'
+      - "8080:8080"
+
+volumes:
+  postgres-data:

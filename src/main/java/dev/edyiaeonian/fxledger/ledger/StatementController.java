@@ -1,5 +1,7 @@
 package dev.edyiaeonian.fxledger.ledger;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
@@ -24,6 +26,7 @@ import dev.edyiaeonian.fxledger.ledger.LedgerRepository.StatementLine;
 
 @RestController
 @Validated
+@Tag(name = "5. Statements")
 class StatementController {
 
     record StatementItem(UUID entryId, String type, String amount, String balanceAfter, Instant createdAt) {
@@ -48,6 +51,9 @@ class StatementController {
         this.ledger = ledger;
     }
 
+    @Operation(
+            summary = "List an account's postings, newest first, with the running balance",
+            description = "Pass nextCursor back as cursor for the next page; it is null on the last page.")
     @GetMapping("/accounts/{accountId}/statement")
     @Transactional(readOnly = true)
     StatementPage statement(

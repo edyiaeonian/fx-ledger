@@ -1,5 +1,9 @@
 package dev.edyiaeonian.fxledger.deposit;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.net.URI;
 import java.time.Instant;
 import java.util.UUID;
@@ -22,9 +26,11 @@ import dev.edyiaeonian.fxledger.money.Money;
 import dev.edyiaeonian.fxledger.money.SupportedCurrencies;
 
 @RestController
+@Tag(name = "2. Deposits")
 class DepositController {
 
-    record DepositRequest(@NotNull String amount, @NotNull String currency) {}
+    record DepositRequest(
+            @Schema(example = "250.00") @NotNull String amount, @Schema(example = "EUR") @NotNull String currency) {}
 
     record DepositResponse(UUID id, UUID accountId, String amount, String currency, UUID entryId, Instant createdAt) {
         static DepositResponse of(Deposit deposit) {
@@ -44,10 +50,15 @@ class DepositController {
         this.service = service;
     }
 
+    @Operation(
+            summary = "Deposit into an account (simulated incoming money)",
+            description = "Idempotent by key. Errors: INVALID_AMOUNT, IDEMPOTENCY_KEY_REQUIRED, ACCOUNT_NOT_FOUND, CURRENCY_MISMATCH, IDEMPOTENCY_KEY_REUSED.")
     @PostMapping("/accounts/{accountId}/deposits")
     ResponseEntity<DepositResponse> deposit(
             @PathVariable UUID accountId,
-            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+            @Parameter(description = "Chosen by the client, unique per operation; a retry with the same key and body returns the original result.", example = "3f2b8c1e-5d7a-4e2b-9c1f-0a6d4e8b7c21")
+                    @RequestHeader(name = "Idempotency-Key", required = false)
+                    String idempotencyKey,
             @Valid @RequestBody DepositRequest request) {
         String key = IdempotencyKeys.require(idempotencyKey);
         Money amount = parsePositive(request.amount(), request.currency());

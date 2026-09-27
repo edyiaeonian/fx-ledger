@@ -27,3 +27,26 @@ jobs:
       # real one through Testcontainers; the runner has Docker built in.
       - name: Build and test
         run: ./gradlew build --console=plain
+
+  # The path a reader takes: build the image, start the whole service with
+  # docker compose, and drive it over HTTP. The build job's tests cover the
+  # code; this covers the packaging -- Dockerfile, compose file, migrations
+  # against a fresh database, configuration from environment variables.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Start the service
+        run: docker compose up -d --build
+
+      - name: Smoke-test the running service
+        run: .github/smoke-test.sh
+
+      - name: Service logs
+        if: failure()
+        run: docker compose logs
+
+      - name: Stop
+        if: always()
+        run: docker compose down --volumes

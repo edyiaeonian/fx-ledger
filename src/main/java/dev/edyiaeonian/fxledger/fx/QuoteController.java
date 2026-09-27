@@ -1,5 +1,8 @@
 package dev.edyiaeonian.fxledger.fx;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.net.URI;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -22,9 +25,13 @@ import dev.edyiaeonian.fxledger.money.Money;
 import dev.edyiaeonian.fxledger.money.SupportedCurrencies;
 
 @RestController
+@Tag(name = "3. Quotes")
 class QuoteController {
 
-    record QuoteRequest(@NotNull String sourceCurrency, @NotNull String targetCurrency, @NotNull String sourceAmount) {}
+    record QuoteRequest(
+            @Schema(example = "EUR") @NotNull String sourceCurrency,
+            @Schema(example = "GBP") @NotNull String targetCurrency,
+            @Schema(description = "What the sender pays, fee included", example = "200.00") @NotNull String sourceAmount) {}
 
     record QuoteResponse(
             UUID id,
@@ -63,6 +70,9 @@ class QuoteController {
         this.service = service;
     }
 
+    @Operation(
+            summary = "Price a transfer at today's ECB mid-market rate plus a fee",
+            description = "The rate is not marked up; the fee (0.5%) is shown separately. Valid for ten minutes. Errors: UNSUPPORTED_CURRENCY, INVALID_AMOUNT, AMOUNT_TOO_SMALL, RATES_UNAVAILABLE.")
     @PostMapping("/quotes")
     ResponseEntity<QuoteResponse> create(@Valid @RequestBody QuoteRequest request) {
         Currency source = SupportedCurrencies.require(request.sourceCurrency());
@@ -81,6 +91,7 @@ class QuoteController {
                 .body(QuoteResponse.of(quote, false));
     }
 
+    @Operation(summary = "Read a quote, including whether it has expired")
     @GetMapping("/quotes/{id}")
     QuoteResponse find(@PathVariable UUID id) {
         Quote quote = service.find(id);
