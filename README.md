@@ -19,7 +19,7 @@ Spring Boot on PostgreSQL.
   for ten minutes.
 
 Write-up: [A PostgreSQL deadlock hiding in a foreign key check](https://dev.to/edyiaeonian/a-postgresql-deadlock-hiding-in-a-foreign-key-check-55ni)
--- how a concurrency test in this project found a deadlock, and why `FOR NO KEY UPDATE`
+— how a concurrency test in this project found a deadlock, and why `FOR NO KEY UPDATE`
 fixed it.
 
 ## Try it
